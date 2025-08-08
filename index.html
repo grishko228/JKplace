@@ -1,1 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Pixel Map with Auth & Colors</title>
+  <style>
+    canvas {
+      border: 1px solid #000;
+      image-rendering: pixelated;
+      cursor: crosshair;
+    }
+    #controls {
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>🌍 Real-time Pixel Map</h2>
 
+  <div id="controls">
+    <button id="loginBtn">🔐 Войти через Google</button>
+    <input type="color" id="colorPicker" value="#FF0000" />
+    <span id="userInfo"></span>
+  </div>
+
+  <canvas id="board" width="500" height="250"></canvas>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js"></script>
+
+  <script>
+    // 🔑 ВСТАВЬ СВОИ ДАННЫЕ ИЗ FIREBASE
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      databaseURL: "https://YOUR_PROJECT.firebaseio.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "SENDER_ID",
+      appId: "APP_ID"
+    };
+
+    // Инициализация
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const auth = firebase.auth();
+
+    // DOM элементы
+    const canvas = document.getElementById("board");
+    const ctx = canvas.getContext("2d");
+    const size = 5;
+    const colorPicker = document.getElementById("colorPicker");
+    const loginBtn = document.getElementById("loginBtn");
+    const userInfo = document.getElementById("userInfo");
+
+    // Фон (карта)
+    const bgImage = new Image();
+    bgImage.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Equirectangular-projection.jpg/800px-Equirectangular-projection.jpg";
+
+    bgImage.onload = () => {
+      drawCanvas();
+    };
+
+    // Рисование пикселей
+    function drawCanvas(data = {}) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+
+      for (const [key, color] of Object.entries(data)) {
+        const [x, y] = key.split(",");
+        ctx.fillStyle = color;
+        ctx.fillRect(x * size, y * size, size, size);
+      }
+    }
+
+    // Подписка на БД
+    db.ref("pixels").on("value", (snapshot) => {
+      const data = snapshot.val();
+      drawCanvas(data || {});
+    });
+
+    // Обработка клика
+    canvas.addEventListener("click", (e) => {
+      const user = auth.currentUser;
+      if (!user) {
+        alert("Пожалуйста, войдите через Google");
+        return;
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / size);
+      const y = Math.floor((e.clientY - rect.top) / size);
+      const color = colorPicker.value;
+
+      db.ref("pixels/" + x + "," + y).set(color);
+    });
+
+    // Авторизация Google
+    loginBtn.addEventListener("click", () => {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider)
+        .then((result) => {
+          const user = result.user;
+          userInfo.textContent = `Привет, ${user.displayName}`;
+        })
+        .catch((error) => {
+          alert("Ошибка входа: " + error.message);
+        });
+    });
+
+    // Отображение пользователя при входе
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        userInfo.textContent = `Привет, ${user.displayName}`;
+      } else {
+        userInfo.textContent = "";
+      }
+    });
+  </script>
+</body>
+</html>
